@@ -38,11 +38,12 @@ class PlantDiseaseCNN(nn.Module):
         return x
 
 
-def build_resnet18(num_classes: int):
+def build_resnet18(num_classes: int, freeze_backbone: bool):
     model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
 
-    for param in model.parameters():
-        param.requires_grad = False
+    if freeze_backbone:
+        for param in model.parameters():
+            param.requires_grad = False
 
     model.fc = nn.Linear(model.fc.in_features, num_classes)
     return model
@@ -52,12 +53,14 @@ def build_model(name: str, num_classes: int):
     if name == "cnn":
         return PlantDiseaseCNN(num_classes)
     if name == "resnet18":
-        return build_resnet18(num_classes)
+        return build_resnet18(num_classes, freeze_backbone=True)
+    if name == "resnet18_ft":
+        return build_resnet18(num_classes, freeze_backbone=False)
     raise ValueError(f"unknown model: {name}")
 
 
 if __name__ == "__main__":
-    for name, image_size in [("cnn", 128), ("resnet18", 224)]:
+    for name, image_size in [("cnn", 128), ("resnet18", 224), ("resnet18_ft", 224)]:
         model = build_model(name, num_classes=3)
 
         dummy_input = torch.randn(1, 3, image_size, image_size)

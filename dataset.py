@@ -9,17 +9,20 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 BATCH_SIZE = 32
 
 # Pretrained models must see inputs preprocessed the same way as during pretraining
+IMAGENET_CONFIG = {
+    "image_size": 224,
+    "mean": [0.485, 0.456, 0.406],
+    "std": [0.229, 0.224, 0.225],
+}
+
 MODEL_CONFIGS = {
     "cnn": {
         "image_size": 128,
         "mean": [0.5, 0.5, 0.5],
         "std": [0.5, 0.5, 0.5],
     },
-    "resnet18": {
-        "image_size": 224,
-        "mean": [0.485, 0.456, 0.406],
-        "std": [0.229, 0.224, 0.225],
-    },
+    "resnet18": IMAGENET_CONFIG,
+    "resnet18_ft": IMAGENET_CONFIG,
 }
 
 

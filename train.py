@@ -12,6 +12,24 @@ from model import build_model
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_EPOCHS = 15
 LEARNING_RATE = 1e-3
+BACKBONE_LEARNING_RATE = 1e-4
+
+
+def build_optimizer(model, model_name: str):
+    if model_name == "resnet18_ft":
+        # Small LR for pretrained layers so fine-tuning doesn't wipe out ImageNet features
+        head_params = list(model.fc.parameters())
+        head_ids = {id(p) for p in head_params}
+        backbone_params = [p for p in model.parameters() if id(p) not in head_ids]
+        return optim.Adam(
+            [
+                {"params": backbone_params, "lr": BACKBONE_LEARNING_RATE},
+                {"params": head_params, "lr": LEARNING_RATE},
+            ]
+        )
+
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    return optim.Adam(trainable_params, lr=LEARNING_RATE)
 
 
 def checkpoint_path(model_name: str) -> str:
@@ -51,10 +69,11 @@ def train(model_name: str):
 
     model = build_model(model_name, num_classes=len(class_names)).to(DEVICE)
     criterion = nn.CrossEntropyLoss()
-    trainable_params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = optim.Adam(trainable_params, lr=LEARNING_RATE)
+    optimizer = build_optimizer(model, model_name)
 
     best_val_accuracy = 0.0
+    best_val_loss = float("inf")
+    best_epoch = 0
     start_time = time.perf_counter()
 
     for epoch in range(1, NUM_EPOCHS + 1):
@@ -84,13 +103,22 @@ def train(model_name: str):
             f"val_accuracy={val_accuracy:.4f}"
         )
 
-        if val_accuracy > best_val_accuracy:
+        # On an accuracy tie, lower val loss means more confident correct predictions
+        is_better = val_accuracy > best_val_accuracy or (
+            val_accuracy == best_val_accuracy and val_loss < best_val_loss
+        )
+        if is_better:
             best_val_accuracy = val_accuracy
+            best_val_loss = val_loss
+            best_epoch = epoch
             torch.save(model.state_dict(), checkpoint_path(model_name))
-            print(f"  saved new best model (val_accuracy={val_accuracy:.4f})")
+            print(f"  saved new best model (val_accuracy={val_accuracy:.4f}, val_loss={val_loss:.4f})")
 
     elapsed = time.perf_counter() - start_time
-    print(f"training done in {elapsed:.0f}s. best val_accuracy={best_val_accuracy:.4f}")
+    print(
+        f"training done in {elapsed:.0f}s. best epoch={best_epoch} "
+        f"val_accuracy={best_val_accuracy:.4f} val_loss={best_val_loss:.4f}"
+    )
 
 
 if __name__ == "__main__":
