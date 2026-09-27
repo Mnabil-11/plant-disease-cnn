@@ -14,58 +14,51 @@ This is an end-to-end learning project covering data preparation, model design, 
 
 ## Results
 
-All three models were evaluated on the same held-out test set: 69 images that were not used for training or for picking the best checkpoint.
+Each model was trained with 3 random seeds (0, 1, 2) and evaluated on the same held-out test set: 69 images that were not used for training or for picking the best checkpoint. The table shows mean ± standard deviation across seeds. The per-seed counts are in parentheses.
 
-| Metric                    | `cnn`         | `resnet18` (frozen) | `resnet18_ft` (fine-tuned) |
-|---------------------------|---------------|---------------------|----------------------------|
-| Test accuracy             | 97.1% (67/69) | 97.1% (67/69)       | **98.6% (68/69)**          |
-| `late_blight` recall      | 0.957         | 0.913               | 0.957                      |
-| Diseased → `healthy`      | 1             | 1                   | 1                          |
-| `healthy` → diseased      | 1             | 0                   | 0                          |
-| Wrong disease             | 0             | 1                   | 0                          |
-| Best epoch (of 15)        | 8             | 14                  | 14                         |
-| Trainable parameters      | 2,121,475     | 1,539               | 11,178,051                 |
-| Training time (CPU)       | 72 s          | 218 s               | 371 s                      |
+| Model | Test accuracy | `late_blight` recall | Missed infections | False alarms |
+|---|---|---|---|---|
+| `cnn` | 97.1% ± 0.0 | 0.913 ± 0.000 | 2.0 (2, 2, 2) | 0.0 (0, 0, 0) |
+| `resnet18` (frozen) | 96.6% ± 0.8 | 0.971 ± 0.025 | 0.7 (1, 0, 1) | 1.7 (2, 2, 1) |
+| `resnet18_ft` (fine-tuned) | **99.5% ± 0.8** | **0.986 ± 0.025** | **0.3 (0, 0, 1)** | **0.0 (0, 0, 0)** |
 
-"Diseased → `healthy`" is a missed infection, the costliest error. "`healthy` → diseased" is a false alarm.
+A missed infection is a diseased leaf predicted as `healthy`, which is the costliest error. A false alarm is a `healthy` leaf predicted as diseased. Per-run numbers are in [`results/experiments.csv`](results/experiments.csv), produced by `experiments.py`.
+
+|                        | `cnn`     | `resnet18` | `resnet18_ft` |
+|------------------------|-----------|------------|---------------|
+| Trainable parameters   | 2,121,475 | 1,539      | 11,178,051    |
+| Training time per seed (CPU) | ~1.5 min | ~3.5 min | ~6 min |
 
 **Takeaways:**
 
-- **Fine-tuning is the best model in both runs** (see the next section) and the most confident on hard cases. On `samples/late_blight.jpg`, a leaf with one small lesion, `resnet18_ft` predicts `late_blight` with 99.8% confidence, `resnet18` with 72.8%, and `cnn` gets it wrong (56.7% `healthy`).
-- **`cnn` and frozen `resnet18` are tied.** Their differences are within the run-to-run noise described below.
-- **The hardest leaves are early-stage `late_blight` with small lesions.** Each model misses exactly one infection, and in every case it is a `late_blight` leaf that is still mostly green.
+- **Fine-tuning wins clearly.** `resnet18_ft` scored 100% on two of three seeds and 98.6% on the third. Its worst seed is still better than the other models' average.
+- **`cnn` and frozen `resnet18` have similar accuracy but opposite error profiles.** `cnn` never raises a false alarm but misses the same two `late_blight` leaves on every seed. Frozen `resnet18` misses fewer infections but flags one or two healthy leaves as diseased on every seed. For disease detection, the frozen ResNet's trade-off is usually preferable.
+- **The errors are tied to specific images, not luck.** `cnn` gets exactly the same two leaves wrong with all three seeds, even though the training curves differ. Frozen `resnet18` flags the same bright, rough-textured healthy leaf on all three seeds.
 
-### Run-to-run variation
+### Why multiple seeds
 
-Training is not seeded, and the whole project was trained twice. Between the two runs, the checkpoint selection rule also changed from "first epoch with the highest validation accuracy" to "highest validation accuracy, ties broken by lower validation loss".
+Before seeding was added, the project was trained twice without a seed. The rankings changed between those runs: in one run `cnn` missed 3 infections and frozen `resnet18` missed 1, and in the other run both missed 1. With 69 test images, one image is worth about 1.5 percentage points, so a single run cannot separate models that differ by one or two images. Seeding makes each run reproducible (training twice with the same seed gives identical results, epoch by epoch), and averaging over seeds shows how much of a difference is real.
 
-| Model         | Run 1 test accuracy | Run 2 test accuracy (reported above) |
-|---------------|---------------------|--------------------------------------|
-| `cnn`         | 95.7%               | 97.1%                                |
-| `resnet18`    | 95.7%               | 97.1%                                |
-| `resnet18_ft` | 97.1%               | 98.6%                                |
+### Plots (seed 0)
 
-In run 1, `cnn` missed 3 `late_blight` leaves while frozen `resnet18` missed only 1. In run 2 both missed 1. With only 69 test images, one image is worth about 1.5 percentage points, so conclusions drawn from a single run are fragile. The only result that held in both runs is that `resnet18_ft` scored highest.
+The plots below come from the seed-0 checkpoints, which is what `python train.py --model <name>` reproduces by default.
 
-### `cnn`
+**`cnn`**: both misses are `late_blight` leaves that are still mostly green, with small or pale lesions.
 
 ![Confusion matrix, cnn](results/cnn/confusion_matrix.png)
 ![Wrong predictions, cnn](results/cnn/wrong_examples.png)
 
-### `resnet18` (frozen)
+**`resnet18` (frozen)**: two false alarms on healthy leaves with a bright, rough surface texture, plus one missed early-stage infection.
 
 ![Confusion matrix, resnet18](results/resnet18/confusion_matrix.png)
 ![Wrong predictions, resnet18](results/resnet18/wrong_examples.png)
 
-### `resnet18_ft` (fine-tuned)
+**`resnet18_ft` (fine-tuned)**: no errors with seed 0.
 
 ![Confusion matrix, resnet18_ft](results/resnet18_ft/confusion_matrix.png)
+![Correct predictions, resnet18_ft](results/resnet18_ft/correct_examples.png)
 
-The only error is a `late_blight` leaf with a single small lesion near the edge:
-
-![Wrong predictions, resnet18_ft](results/resnet18_ft/wrong_examples.png)
-
-Correct predictions from each model are saved in `results/<model>/correct_examples.png`.
+Correct predictions for the other models are saved in `results/<model>/correct_examples.png`.
 
 ## Dataset
 
@@ -113,6 +106,7 @@ Both ResNet models resize inputs to 224×224 and normalize them with the ImageNe
 - Optimizer: Adam
 - 15 epochs, batch size 32
 - Augmentation (training set only): random horizontal flip and random rotation of up to 15°
+- Seeded with `torch.manual_seed` (default seed 0, set with `--seed`). The seed controls weight initialization, shuffling order, and augmentation.
 - Checkpoint selection: the epoch with the highest validation accuracy, with ties broken by the lower validation loss. The tie-break matters for `resnet18_ft`, which reaches 100% validation accuracy from epoch 2 onward, so accuracy alone cannot rank those epochs.
 
 ## Project structure
@@ -126,15 +120,17 @@ Both ResNet models resize inputs to 224×224 and normalize them with the ImageNe
 ├── train.py               # training loop, saves best_<model>.pth
 ├── evaluate.py            # test-set metrics and plots, saved to results/<model>/
 ├── predict.py             # predict the class of a single image
+├── experiments.py         # train every model with seeds 0, 1, 2 and summarize
 ├── samples/               # one unseen image per class for quick testing
 ├── results/
+│   ├── experiments.csv    # per-seed test metrics
 │   ├── cnn/
 │   ├── resnet18/
 │   └── resnet18_ft/
 └── requirements.txt
 ```
 
-`data/` and the `best_<model>.pth` checkpoints are not tracked in git. Running the steps below regenerates them.
+`data/`, `checkpoints/`, and the `best_<model>.pth` files are not tracked in git. Running the steps below regenerates them.
 
 ## How to run
 
@@ -157,30 +153,39 @@ python evaluate.py --model resnet18_ft
 python predict.py --model resnet18_ft samples/late_blight.jpg
 ```
 
+`train.py` also accepts `--seed` (default 0). To reproduce the full 3-seed comparison, which takes about 35 minutes on CPU:
+
+```bash
+python experiments.py
+```
+
 The first ResNet run downloads the pretrained weights (about 45 MB) from download.pytorch.org.
 
-Example of `predict.py` on `samples/late_blight.jpg`:
+Example of `predict.py` on `samples/late_blight.jpg`, an early-stage `late_blight` leaf with a single small lesion:
 
 ```
 model: resnet18_ft
 image: late_blight.jpg
-prediction: late_blight (99.8% confidence)
+prediction: late_blight (99.9% confidence)
 
-  late_blight    99.8%
-  healthy        0.2%
+  late_blight    99.9%
+  healthy        0.1%
   early_blight   0.0%
 ```
 
+With seed 0, `cnn` gets this leaf wrong and is confident about it: `healthy` at 85.3%.
+
 ## Limitations
 
-- **Small dataset.** There are only 105 training images per class. The test set has 69 images, so each test image changes accuracy by about 1.5 percentage points, and model rankings can change between runs.
+- **Small dataset.** There are only 105 training images per class. The test set has 69 images, so each test image changes accuracy by about 1.5 percentage points. Three seeds reduce the effect of luck, but they are still a small sample.
+- **One fixed split.** All seeds share the same train/val/test split, so the results measure variation from training, not from which images ended up in the test set.
 - **Validation set too small to rank the best models.** `resnet18_ft` reaches 100% validation accuracy (66/66) after two epochs, so accuracy alone stops distinguishing checkpoints.
 - **Lab conditions.** All PlantVillage images have a plain background and controlled lighting. Performance on real field photos (soil, other leaves, shadows) is expected to be noticeably worse because of domain shift.
 - **Frozen BatchNorm statistics.** In `resnet18`, the frozen layers are not trained, but their BatchNorm running statistics still update in training mode.
 
 ## Possible improvements
 
-- Seed training and average results over several runs (or use k-fold cross-validation) so comparisons are not decided by one or two images.
+- Use k-fold cross-validation so the test images also vary between runs.
 - Use more data, especially early-stage `late_blight` examples, and a larger validation set.
-- Flag low-confidence predictions (for example below 80%) for manual review instead of returning a hard label.
+- Flag low-confidence predictions for manual review. Confidence alone is not enough, though: `cnn` misclassifies `samples/late_blight.jpg` at 85.3% confidence.
 - Test on real field photos to measure the effect of domain shift.

@@ -13,6 +13,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_EPOCHS = 15
 LEARNING_RATE = 1e-3
 BACKBONE_LEARNING_RATE = 1e-4
+DEFAULT_SEED = 0
 
 
 def build_optimizer(model, model_name: str):
@@ -64,7 +65,11 @@ def evaluate(model, loader, criterion):
     return avg_loss, accuracy
 
 
-def train(model_name: str):
+def train(model_name: str, seed: int = DEFAULT_SEED, save_path: str | None = None) -> str:
+    save_path = save_path or checkpoint_path(model_name)
+    # Seeds weight init, shuffling order, and augmentation, which all draw from torch's RNG
+    torch.manual_seed(seed)
+
     train_loader, val_loader, test_loader, class_names = get_dataloaders(model_name)
 
     model = build_model(model_name, num_classes=len(class_names)).to(DEVICE)
@@ -111,7 +116,7 @@ def train(model_name: str):
             best_val_accuracy = val_accuracy
             best_val_loss = val_loss
             best_epoch = epoch
-            torch.save(model.state_dict(), checkpoint_path(model_name))
+            torch.save(model.state_dict(), save_path)
             print(f"  saved new best model (val_accuracy={val_accuracy:.4f}, val_loss={val_loss:.4f})")
 
     elapsed = time.perf_counter() - start_time
@@ -119,8 +124,11 @@ def train(model_name: str):
         f"training done in {elapsed:.0f}s. best epoch={best_epoch} "
         f"val_accuracy={best_val_accuracy:.4f} val_loss={best_val_loss:.4f}"
     )
+    return save_path
 
 
 if __name__ == "__main__":
-    args = parse_model_arg(__doc__).parse_args()
-    train(args.model)
+    parser = parse_model_arg(__doc__)
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    args = parser.parse_args()
+    train(args.model, seed=args.seed)
