@@ -6,9 +6,9 @@ from pathlib import Path
 import torch
 from PIL import Image
 
-from dataset import DATA_DIR, eval_transform
-from model import PlantDiseaseCNN
-from train import CHECKPOINT_PATH, DEVICE
+from dataset import DATA_DIR, build_transforms
+from model import build_model
+from train import DEVICE, checkpoint_path, parse_model_arg
 
 
 def load_class_names():
@@ -16,14 +16,15 @@ def load_class_names():
     return sorted(p.name for p in (DATA_DIR / "train").iterdir() if p.is_dir())
 
 
-def load_model(num_classes):
-    model = PlantDiseaseCNN(num_classes=num_classes).to(DEVICE)
-    model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=DEVICE))
+def load_model(model_name, num_classes):
+    model = build_model(model_name, num_classes=num_classes).to(DEVICE)
+    model.load_state_dict(torch.load(checkpoint_path(model_name), map_location=DEVICE))
     model.eval()
     return model
 
 
-def predict(model, image_path, class_names):
+def predict(model, model_name, image_path, class_names):
+    _, eval_transform = build_transforms(model_name)
     image = Image.open(image_path).convert("RGB")
     tensor = eval_transform(image).unsqueeze(0).to(DEVICE)
 
@@ -35,15 +36,16 @@ def predict(model, image_path, class_names):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = parse_model_arg(__doc__)
     parser.add_argument("image_path", type=Path)
     args = parser.parse_args()
 
     class_names = load_class_names()
-    model = load_model(len(class_names))
-    probabilities = predict(model, args.image_path, class_names)
+    model = load_model(args.model, len(class_names))
+    probabilities = predict(model, args.model, args.image_path, class_names)
 
     best_class = max(probabilities, key=probabilities.get)
+    print(f"model: {args.model}")
     print(f"image: {args.image_path.name}")
     print(f"prediction: {best_class} ({probabilities[best_class]:.1%} confidence)\n")
     for name, prob in sorted(probabilities.items(), key=lambda kv: kv[1], reverse=True):

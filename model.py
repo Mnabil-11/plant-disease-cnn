@@ -1,7 +1,8 @@
-"""A small CNN for classifying plant leaf images."""
+"""Models for classifying plant leaf images: a small CNN and a pretrained ResNet18."""
 
 import torch
 from torch import nn
+from torchvision import models
 
 
 class PlantDiseaseCNN(nn.Module):
@@ -37,11 +38,36 @@ class PlantDiseaseCNN(nn.Module):
         return x
 
 
+def build_resnet18(num_classes: int):
+    model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+
+    for param in model.parameters():
+        param.requires_grad = False
+
+    model.fc = nn.Linear(model.fc.in_features, num_classes)
+    return model
+
+
+def build_model(name: str, num_classes: int):
+    if name == "cnn":
+        return PlantDiseaseCNN(num_classes)
+    if name == "resnet18":
+        return build_resnet18(num_classes)
+    raise ValueError(f"unknown model: {name}")
+
+
 if __name__ == "__main__":
-    model = PlantDiseaseCNN(num_classes=3)
+    for name, image_size in [("cnn", 128), ("resnet18", 224)]:
+        model = build_model(name, num_classes=3)
 
-    dummy_input = torch.randn(1, 3, 128, 128)
-    output = model(dummy_input)
+        dummy_input = torch.randn(1, 3, image_size, image_size)
+        output = model(dummy_input)
 
-    print("input shape: ", dummy_input.shape)
-    print("output shape:", output.shape)
+        total = sum(p.numel() for p in model.parameters())
+        trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+        print(f"[{name}]")
+        print("  input shape:         ", tuple(dummy_input.shape))
+        print("  output shape:        ", tuple(output.shape))
+        print(f"  total parameters:     {total:,}")
+        print(f"  trainable parameters: {trainable:,}")

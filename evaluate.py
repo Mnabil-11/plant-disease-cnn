@@ -13,11 +13,11 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 
-from dataset import NORM_MEAN, NORM_STD, get_dataloaders
-from model import PlantDiseaseCNN
-from train import CHECKPOINT_PATH, DEVICE
+from dataset import MODEL_CONFIGS, get_dataloaders
+from model import build_model
+from train import DEVICE, checkpoint_path, parse_model_arg
 
-RESULTS_DIR = Path(__file__).resolve().parent / "results"
+RESULTS_ROOT = Path(__file__).resolve().parent / "results"
 NUM_EXAMPLES = 6
 
 
@@ -35,20 +35,20 @@ def collect_predictions(model, loader):
     return torch.cat(all_images), torch.cat(all_labels), torch.cat(all_preds)
 
 
-def unnormalize(image):
-    mean = torch.tensor(NORM_MEAN).view(3, 1, 1)
-    std = torch.tensor(NORM_STD).view(3, 1, 1)
+def unnormalize(image, config):
+    mean = torch.tensor(config["mean"]).view(3, 1, 1)
+    std = torch.tensor(config["std"]).view(3, 1, 1)
     return (image * std + mean).clamp(0, 1).permute(1, 2, 0)
 
 
-def plot_examples(images, labels, preds, class_names, indices, title, path):
+def plot_examples(images, labels, preds, class_names, indices, config, title, path):
     if not indices:
         print(f"no examples for: {title}")
         return
 
     fig, axes = plt.subplots(1, len(indices), figsize=(3 * len(indices), 3.5), squeeze=False)
     for ax, idx in zip(axes[0], indices):
-        ax.imshow(unnormalize(images[idx]))
+        ax.imshow(unnormalize(images[idx], config))
         ax.set_title(
             f"true: {class_names[labels[idx]]}\npred: {class_names[preds[idx]]}",
             fontsize=9,
@@ -61,12 +61,14 @@ def plot_examples(images, labels, preds, class_names, indices, title, path):
     plt.close(fig)
 
 
-def main():
-    RESULTS_DIR.mkdir(exist_ok=True)
-    _, _, test_loader, class_names = get_dataloaders()
+def main(model_name: str):
+    config = MODEL_CONFIGS[model_name]
+    results_dir = RESULTS_ROOT / model_name
+    results_dir.mkdir(parents=True, exist_ok=True)
+    _, _, test_loader, class_names = get_dataloaders(model_name)
 
-    model = PlantDiseaseCNN(num_classes=len(class_names)).to(DEVICE)
-    model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=DEVICE))
+    model = build_model(model_name, num_classes=len(class_names)).to(DEVICE)
+    model.load_state_dict(torch.load(checkpoint_path(model_name), map_location=DEVICE))
 
     images, labels, preds = collect_predictions(model, test_loader)
 
@@ -79,9 +81,9 @@ def main():
     print(cm)
 
     ConfusionMatrixDisplay(cm, display_labels=class_names).plot(cmap="Blues")
-    plt.title("Confusion matrix (test set)")
+    plt.title(f"Confusion matrix (test set, {model_name})")
     plt.tight_layout()
-    plt.savefig(RESULTS_DIR / "confusion_matrix.png", dpi=120)
+    plt.savefig(results_dir / "confusion_matrix.png", dpi=120)
     plt.close()
 
     per_class = NUM_EXAMPLES // len(class_names)
@@ -92,13 +94,14 @@ def main():
     ]
     wrong_idx = (preds != labels).nonzero().flatten().tolist()[:NUM_EXAMPLES]
 
-    plot_examples(images, labels, preds, class_names, correct_idx,
-                  "Correct predictions", RESULTS_DIR / "correct_examples.png")
-    plot_examples(images, labels, preds, class_names, wrong_idx,
-                  "Wrong predictions", RESULTS_DIR / "wrong_examples.png")
+    plot_examples(images, labels, preds, class_names, correct_idx, config,
+                  f"Correct predictions ({model_name})", results_dir / "correct_examples.png")
+    plot_examples(images, labels, preds, class_names, wrong_idx, config,
+                  f"Wrong predictions ({model_name})", results_dir / "wrong_examples.png")
 
-    print(f"\nplots saved to {RESULTS_DIR}")
+    print(f"\nplots saved to {results_dir}")
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_model_arg(__doc__).parse_args()
+    main(args.model)
