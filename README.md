@@ -121,6 +121,7 @@ Both ResNet models resize inputs to 224×224 and normalize them with the ImageNe
 ├── evaluate.py            # test-set metrics and plots, saved to results/<model>/
 ├── predict.py             # predict the class of a single image
 ├── experiments.py         # train every model with seeds 0, 1, 2 and summarize
+├── app.py                 # Gradio web demo
 ├── samples/               # one unseen image per class for quick testing
 ├── results/
 │   ├── experiments.csv    # per-seed test metrics
@@ -174,6 +175,16 @@ prediction: late_blight (99.9% confidence)
 ```
 
 With seed 0, `cnn` gets this leaf wrong and is confident about it: `healthy` at 85.3%.
+
+### Web demo
+
+A small [Gradio](https://www.gradio.app/) app wraps `predict.py` in a browser UI. You can upload a leaf photo or click one of the samples, pick a model, and see the confidence for each class. It needs the trained checkpoints (`best_<model>.pth`) to be present.
+
+```bash
+python app.py
+```
+
+Then open http://127.0.0.1:7860.
 
 ## Limitations
 

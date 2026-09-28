@@ -23,10 +23,9 @@ def load_model(model_name, num_classes):
     return model
 
 
-def predict(model, model_name, image_path, class_names):
+def predict(model, model_name, image: Image.Image, class_names):
     _, eval_transform = build_transforms(model_name)
-    image = Image.open(image_path).convert("RGB")
-    tensor = eval_transform(image).unsqueeze(0).to(DEVICE)
+    tensor = eval_transform(image.convert("RGB")).unsqueeze(0).to(DEVICE)
 
     with torch.no_grad():
         logits = model(tensor)
@@ -42,7 +41,7 @@ def main():
 
     class_names = load_class_names()
     model = load_model(args.model, len(class_names))
-    probabilities = predict(model, args.model, args.image_path, class_names)
+    probabilities = predict(model, args.model, Image.open(args.image_path), class_names)
 
     best_class = max(probabilities, key=probabilities.get)
     print(f"model: {args.model}")
