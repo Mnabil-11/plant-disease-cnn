@@ -60,6 +60,27 @@ The plots below come from the seed-0 checkpoints, which is what `python train.py
 
 Correct predictions for the other models are saved in `results/<model>/correct_examples.png`.
 
+## Where the models look (Grad-CAM)
+
+[Grad-CAM](https://arxiv.org/abs/1610.02391) highlights the image regions that pushed a model toward its predicted class. It weights the feature maps of the last convolutional layer by the gradient of the predicted class score, then upsamples the result onto the image. Red means strong evidence for the prediction shown above each panel. `gradcam.py` implements this from scratch with forward and backward hooks and uses the seed-0 checkpoints.
+
+![Grad-CAM comparison](results/gradcam.png)
+
+The rows are the hardest images from the multi-seed experiments, plus an easy `early_blight` leaf for reference. What the maps show:
+
+- **`cnn` misses infections because it ignores the lesion.** In rows 1, 2, and 4, the true class is `late_blight`, and `cnn` predicts `healthy` from the green tissue while the lesions sit in cold regions. This fits the earlier guess that it relies on how much of the leaf is green rather than on lesion shape.
+- **The pretrained models find the lesion.** In rows 2 and 4, both ResNet models put their hottest region right on the pale lesion. This matches their higher `late_blight` recall.
+- **Frozen `resnet18` sometimes looks at the background.** Its false alarm on the healthy leaf in row 3, and its miss in row 1, are driven mostly by the gray background and shadow outside the leaf. That is a shortcut, not a leaf feature. After fine-tuning, `resnet18_ft` focuses on the leaf and gets both images right.
+- **A correct answer can still rest on weak evidence.** On the easy `early_blight` leaf in row 5, `cnn` is 100% confident, but its heat sits mostly on the leaf border and the background corner instead of on the many lesions.
+
+Caveats: Grad-CAM is an approximation of what drives a prediction, not a full explanation. ResNet maps come from a 7×7 grid, so they are much coarser than the 32×32 `cnn` maps. These are five hand-picked images, so they illustrate the error patterns but do not prove them.
+
+To run it on your own images:
+
+```bash
+python gradcam.py path/to/leaf1.jpg path/to/leaf2.jpg
+```
+
 ## Dataset
 
 A small, balanced sample of the [PlantVillage dataset](https://github.com/spMohanty/PlantVillage-Dataset) (color images, 256×256):
@@ -122,6 +143,7 @@ Both ResNet models resize inputs to 224×224 and normalize them with the ImageNe
 ├── predict.py             # predict the class of a single image
 ├── experiments.py         # train every model with seeds 0, 1, 2 and summarize
 ├── app.py                 # Gradio web demo
+├── gradcam.py             # Grad-CAM heatmaps, saved to results/gradcam.png
 ├── samples/               # one unseen image per class for quick testing
 ├── results/
 │   ├── experiments.csv    # per-seed test metrics
