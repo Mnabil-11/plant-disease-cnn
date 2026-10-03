@@ -64,7 +64,7 @@ Correct predictions for the other models are saved in `results/<model>/correct_e
 
 [Grad-CAM](https://arxiv.org/abs/1610.02391) highlights the image regions that pushed a model toward its predicted class. It weights the feature maps of the last convolutional layer by the gradient of the predicted class score, then upsamples the result onto the image. Red means strong evidence for the prediction shown above each panel. `gradcam.py` implements this from scratch with forward and backward hooks and uses the seed-0 checkpoints.
 
-![Grad-CAM comparison](results/gradcam.png)
+![Grad-CAM comparison](results/gradcam.jpg)
 
 The rows are the hardest images from the multi-seed experiments, plus an easy `early_blight` leaf for reference. What the maps show:
 
@@ -143,7 +143,7 @@ Both ResNet models resize inputs to 224×224 and normalize them with the ImageNe
 ├── predict.py             # predict the class of a single image
 ├── experiments.py         # train every model with seeds 0, 1, 2 and summarize
 ├── app.py                 # Gradio web demo
-├── gradcam.py             # Grad-CAM heatmaps, saved to results/gradcam.png
+├── gradcam.py             # Grad-CAM heatmaps, saved to results/gradcam.jpg
 ├── samples/               # one unseen image per class for quick testing
 ├── results/
 │   ├── experiments.csv    # per-seed test metrics

@@ -16,7 +16,7 @@ from predict import load_class_names, load_model
 from train import DEVICE
 
 ROOT = Path(__file__).resolve().parent
-OUTPUT_PATH = ROOT / "results" / "gradcam.png"
+OUTPUT_PATH = ROOT / "results" / "gradcam.jpg"
 
 DEFAULT_IMAGES = [
     "data/test/late_blight/0441138d*",
@@ -109,7 +109,7 @@ def main(image_patterns):
         ax.axis("off")
 
     fig.tight_layout()
-    fig.savefig(OUTPUT_PATH, dpi=110)
+    fig.savefig(OUTPUT_PATH, dpi=110, pil_kwargs={"quality": 85})
     plt.close(fig)
     print(f"saved {OUTPUT_PATH}")
 
