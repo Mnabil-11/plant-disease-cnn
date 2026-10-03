@@ -169,6 +169,7 @@ Both ResNet models resize inputs to 224×224 and normalize them with the ImageNe
 │   ├── download_data.py   # download the PlantVillage sample into data/raw/
 │   ├── split_data.py      # split data/raw/ into data/train, data/val, data/test
 │   ├── export_onnx.py     # export resnet18_ft to web/model.onnx
+│   ├── quantize_onnx.py   # int8 quantization to web/model_int8.onnx
 │   └── deploy_space.py    # deploy the in-browser demo to a static HF Space
 ├── dataset.py             # per-model transforms and DataLoaders
 ├── model.py               # small CNN and pretrained ResNet18 (frozen or fine-tuned)
@@ -189,7 +190,7 @@ Both ResNet models resize inputs to 224×224 and normalize them with the ImageNe
 └── requirements.txt
 ```
 
-`data/`, `checkpoints/`, `web/model.onnx`, and the `best_<model>.pth` / `best_<model>_aug.pth` files are not tracked in git. Running the steps below regenerates them.
+`data/`, `checkpoints/`, the `web/*.onnx` models, and the `best_<model>.pth` / `best_<model>_aug.pth` files are not tracked in git. Running the steps below regenerates them.
 
 ## How to run
 
@@ -240,12 +241,25 @@ With seed 0, `cnn` gets this leaf wrong and is confident about it: `healthy` at 
 
 **In-browser demo (no server).** `resnet18_ft` is exported to ONNX and runs client-side with [ONNX Runtime Web](https://onnxruntime.ai/docs/tutorials/web/), so the page is fully static and uploaded images never leave the visitor's device. `web/index.html` reproduces the training preprocessing in JavaScript: resize to 224×224, scale to 0–1, normalize with the ImageNet mean and std, and lay the data out as CHW. On the three sample images, the browser's probabilities match PyTorch to within 0.04 percentage points. The small gap comes from canvas resizing differing slightly from PIL.
 
+The deployed model is quantized to int8 with ONNX Runtime static quantization (QDQ format, per-channel weights, calibrated on 60 training images). Measured on the 69 test images and in the browser:
+
+| | float32 | int8 |
+|---|---|---|
+| File size | 44.8 MB | **11.3 MB** |
+| Test accuracy | 100% (69/69) | 100% (69/69) |
+| Same prediction as float32 | — | 69/69 |
+| Probability difference vs float32 | — | mean 0.21 pp, max 9.1 pp |
+| Browser inference (WASM, warm, average of 10 runs) | 118 ms | **65 ms** |
+
+The largest differences fall on the same hard images seen in the Grad-CAM section, such as shiny healthy leaves and a leaf with tiny lesions. The model is least confident on these, so small quantization errors move their probabilities most. Calibration uses training images only, so the test set stays unseen.
+
 ```bash
-python scripts/export_onnx.py     # writes web/model.onnx (~45 MB) and checks it against PyTorch
+python scripts/export_onnx.py     # writes web/model.onnx (float32) and checks it against PyTorch
+python scripts/quantize_onnx.py   # writes web/model_int8.onnx and compares it with float32 on the test set
 python scripts/deploy_space.py    # uploads web/ + samples to a static Hugging Face Space (needs `hf auth login`)
 ```
 
-To try the page locally, serve a folder that contains `index.html`, `model.onnx`, and `samples/` with any static file server. For example, run `python -m http.server` from such a folder.
+To try the page locally, serve a folder that contains `index.html`, `model_int8.onnx`, and `samples/` with any static file server. For example, run `python -m http.server` from such a folder.
 
 **Gradio app (local).** `app.py` wraps `predict.py` in a browser UI where you can pick any of the three models. It needs the trained checkpoints (`best_<model>.pth`).
 

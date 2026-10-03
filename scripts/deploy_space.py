@@ -1,7 +1,8 @@
 """Deploy the in-browser demo (web/) to a static Hugging Face Space.
 
 Static Spaces are free; the model runs client-side with ONNX Runtime Web.
-Requires `python scripts/export_onnx.py` first, and being logged in with `hf auth login`.
+Requires `python scripts/export_onnx.py` and `python scripts/quantize_onnx.py` first,
+and being logged in with `hf auth login`.
 """
 
 import argparse
@@ -33,12 +34,15 @@ Code, training details, and evaluation: {GITHUB_URL}
 
 
 def build_bundle(target: Path) -> None:
-    model_path = WEB_DIR / "model.onnx"
+    model_path = WEB_DIR / "model_int8.onnx"
     if not model_path.exists():
-        raise SystemExit("web/model.onnx not found. Run `python scripts/export_onnx.py` first.")
+        raise SystemExit(
+            "web/model_int8.onnx not found. Run `python scripts/export_onnx.py` "
+            "then `python scripts/quantize_onnx.py` first."
+        )
 
     shutil.copy2(WEB_DIR / "index.html", target / "index.html")
-    shutil.copy2(model_path, target / "model.onnx")
+    shutil.copy2(model_path, target / "model_int8.onnx")
     shutil.copytree(ROOT / "samples", target / "samples")
     (target / "README.md").write_text(SPACE_README, encoding="utf-8")
 
@@ -57,6 +61,8 @@ def main(repo_name: str, private: bool) -> None:
             repo_id=repo_id,
             repo_type="space",
             commit_message="Deploy in-browser demo",
+            # Drop model files from earlier deploys that this bundle no longer ships
+            delete_patterns=["*.onnx"],
         )
 
     print(f"https://huggingface.co/spaces/{repo_id}")

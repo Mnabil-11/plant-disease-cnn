@@ -87,7 +87,7 @@
   <h1>Potato Leaf Disease Classifier</h1>
   <p>Upload a photo of a single potato leaf to classify it as <strong>healthy</strong>, <strong>early blight</strong>, or <strong>late blight</strong>.</p>
   <p class="muted">
-    The model, a fine-tuned ResNet18, runs entirely in your browser with ONNX Runtime Web, so your image never leaves your device.
+    The model, a fine-tuned ResNet18 quantized to int8 (11 MB), runs entirely in your browser with ONNX Runtime Web, so your image never leaves your device.
     It was trained on PlantVillage photos that show one leaf on a plain gray background, so photos taken in the field (soil, other leaves, shadows) will likely be less accurate.
   </p>
 
@@ -262,7 +262,7 @@
 
   (async () => {
     try {
-      const modelBytes = await fetchWithProgress("model.onnx");
+      const modelBytes = await fetchWithProgress("model_int8.onnx");
       statusEl.textContent = "Starting model…";
       session = await ort.InferenceSession.create(modelBytes, { executionProviders: ["wasm"] });
       progressEl.hidden = true;
