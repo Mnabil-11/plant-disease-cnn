@@ -1,6 +1,7 @@
-"""Deploy the Gradio demo to a Hugging Face Space.
+"""Deploy the in-browser demo (web/) to a static Hugging Face Space.
 
-Requires being logged in first: `hf auth login` with a write token.
+Static Spaces are free; the model runs client-side with ONNX Runtime Web.
+Requires `python scripts/export_onnx.py` first, and being logged in with `hf auth login`.
 """
 
 import argparse
@@ -11,50 +12,41 @@ from pathlib import Path
 from huggingface_hub import HfApi
 
 ROOT = Path(__file__).resolve().parent.parent
+WEB_DIR = ROOT / "web"
 GITHUB_URL = "https://github.com/Mnabil-11/plant-disease-cnn"
-
-CODE_FILES = ["app.py", "predict.py", "dataset.py", "model.py", "train.py"]
-CHECKPOINTS = ["best_cnn.pth", "best_resnet18.pth", "best_resnet18_ft.pth"]
-
-# CPU-only wheels: Spaces' free hardware has no GPU, and the CUDA build is several GB
-SPACE_REQUIREMENTS = """\
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.14.0
-torchvision==0.29.0
-"""
 
 SPACE_README = f"""\
 ---
 title: Potato Leaf Disease Classifier
 colorFrom: green
 colorTo: yellow
-sdk: gradio
-sdk_version: 6.28.0
-python_version: "3.11"
-app_file: app.py
+sdk: static
 pinned: false
 short_description: Classify potato leaves as healthy, early or late blight
 ---
 
-Classifies a potato leaf photo as healthy, early blight, or late blight. It compares a small CNN
-trained from scratch with frozen and fine-tuned ResNet18 models, all trained on a PlantVillage sample.
+Classifies a potato leaf photo as healthy, early blight, or late blight with a fine-tuned ResNet18.
+The model runs in your browser with ONNX Runtime Web, so images are not uploaded anywhere.
 
 Code, training details, and evaluation: {GITHUB_URL}
 """
 
 
 def build_bundle(target: Path) -> None:
-    for name in CODE_FILES + CHECKPOINTS:
-        shutil.copy2(ROOT / name, target / name)
+    model_path = WEB_DIR / "model.onnx"
+    if not model_path.exists():
+        raise SystemExit("web/model.onnx not found. Run `python scripts/export_onnx.py` first.")
+
+    shutil.copy2(WEB_DIR / "index.html", target / "index.html")
+    shutil.copy2(model_path, target / "model.onnx")
     shutil.copytree(ROOT / "samples", target / "samples")
-    (target / "requirements.txt").write_text(SPACE_REQUIREMENTS)
     (target / "README.md").write_text(SPACE_README, encoding="utf-8")
 
 
 def main(repo_name: str, private: bool) -> None:
     api = HfApi()
     repo_id = f"{api.whoami()['name']}/{repo_name}"
-    api.create_repo(repo_id, repo_type="space", space_sdk="gradio", private=private, exist_ok=True)
+    api.create_repo(repo_id, repo_type="space", space_sdk="static", private=private, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmp:
         bundle = Path(tmp)
@@ -64,7 +56,7 @@ def main(repo_name: str, private: bool) -> None:
             folder_path=bundle,
             repo_id=repo_id,
             repo_type="space",
-            commit_message="Deploy Gradio demo",
+            commit_message="Deploy in-browser demo",
         )
 
     print(f"https://huggingface.co/spaces/{repo_id}")

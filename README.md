@@ -165,14 +165,17 @@ Both ResNet models resize inputs to 224×224 and normalize them with the ImageNe
 ```
 ├── scripts/
 │   ├── download_data.py   # download the PlantVillage sample into data/raw/
-│   └── split_data.py      # split data/raw/ into data/train, data/val, data/test
+│   ├── split_data.py      # split data/raw/ into data/train, data/val, data/test
+│   ├── export_onnx.py     # export resnet18_ft to web/model.onnx
+│   └── deploy_space.py    # deploy the in-browser demo to a static HF Space
 ├── dataset.py             # per-model transforms and DataLoaders
 ├── model.py               # small CNN and pretrained ResNet18 (frozen or fine-tuned)
 ├── train.py               # training loop, saves best_<model>.pth
 ├── evaluate.py            # test-set metrics and plots, saved to results/<model>/
 ├── predict.py             # predict the class of a single image
 ├── experiments.py         # train every model with seeds 0, 1, 2 and summarize
-├── app.py                 # Gradio web demo
+├── app.py                 # Gradio web demo (local)
+├── web/index.html         # in-browser demo (ONNX Runtime Web)
 ├── gradcam.py             # Grad-CAM heatmaps, saved to results/gradcam*.jpg
 ├── samples/               # one unseen image per class for quick testing
 ├── results/
@@ -184,7 +187,7 @@ Both ResNet models resize inputs to 224×224 and normalize them with the ImageNe
 └── requirements.txt
 ```
 
-`data/`, `checkpoints/`, and the `best_<model>.pth` / `best_<model>_aug.pth` files are not tracked in git. Running the steps below regenerates them.
+`data/`, `checkpoints/`, `web/model.onnx`, and the `best_<model>.pth` / `best_<model>_aug.pth` files are not tracked in git. Running the steps below regenerates them.
 
 ## How to run
 
@@ -231,9 +234,18 @@ prediction: late_blight (99.9% confidence)
 
 With seed 0, `cnn` gets this leaf wrong and is confident about it: `healthy` at 85.3%.
 
-### Web demo
+### Web demos
 
-A small [Gradio](https://www.gradio.app/) app wraps `predict.py` in a browser UI. You can upload a leaf photo or click one of the samples, pick a model, and see the confidence for each class. It needs the trained checkpoints (`best_<model>.pth`) to be present.
+**In-browser demo (no server).** `resnet18_ft` is exported to ONNX and runs client-side with [ONNX Runtime Web](https://onnxruntime.ai/docs/tutorials/web/), so the page is fully static and uploaded images never leave the visitor's device. `web/index.html` reproduces the training preprocessing in JavaScript: resize to 224×224, scale to 0–1, normalize with the ImageNet mean and std, and lay the data out as CHW. On the three sample images, the browser's probabilities match PyTorch to within 0.04 percentage points. The small gap comes from canvas resizing differing slightly from PIL.
+
+```bash
+python scripts/export_onnx.py     # writes web/model.onnx (~45 MB) and checks it against PyTorch
+python scripts/deploy_space.py    # uploads web/ + samples to a static Hugging Face Space (needs `hf auth login`)
+```
+
+To try the page locally, serve a folder that contains `index.html`, `model.onnx`, and `samples/` with any static file server. For example, run `python -m http.server` from such a folder.
+
+**Gradio app (local).** `app.py` wraps `predict.py` in a browser UI where you can pick any of the three models. It needs the trained checkpoints (`best_<model>.pth`).
 
 ```bash
 python app.py
