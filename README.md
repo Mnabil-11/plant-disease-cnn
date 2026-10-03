@@ -81,6 +81,36 @@ To run it on your own images:
 python gradcam.py path/to/leaf1.jpg path/to/leaf2.jpg
 ```
 
+## Trying to fix the shortcuts with stronger augmentation
+
+Grad-CAM showed two shortcuts: `cnn` relies on how green the leaf is, and frozen `resnet18` sometimes relies on the background. To break them, I retrained every model with stronger training-time augmentation (`--strong-augment`):
+
+- `RandomResizedCrop` (60–100% of the image), so the amount and position of background change in every epoch
+- `ColorJitter` (brightness, contrast, and saturation ±30%, hue ±0.03), so the intensity of green and the background tone change. Hue is kept small because yellowing is a real `early_blight` symptom.
+- Vertical flips and rotation of up to 30° (instead of 15°)
+
+The setup is otherwise the same: 3 seeds and the same test set.
+
+| Model | Basic augmentation | Strong augmentation | Missed infections (basic → strong) | False alarms (basic → strong) |
+|---|---|---|---|---|
+| `cnn` | 97.1% ± 0.0 | 89.9% ± 3.8 | 2.0 → **5.3** | 0.0 → 0.0 |
+| `resnet18` (frozen) | 96.6% ± 0.8 | 97.6% ± 0.8 | 0.7 → 1.3 | 1.7 → **0.0** |
+| `resnet18_ft` | **99.5% ± 0.8** | 97.1% ± 1.4 | 0.3 → 1.7 | 0.0 → 0.0 |
+
+Per-run numbers are in [`results/experiments_aug.csv`](results/experiments_aug.csv).
+
+![Grad-CAM before and after strong augmentation](results/gradcam_compare_aug.jpg)
+
+**Strong augmentation helped only the model whose shortcut it targeted:**
+
+- **Frozen `resnet18`: background false alarms are gone.** False alarms dropped from 2, 2, 1 to 0, 0, 0 across seeds. In row 3, the heatmap moves from the background corner onto the leaf, and the prediction flips to the correct `healthy`. On the other hand, it now misses slightly more infections.
+- **`cnn`: worse, and the core shortcut remains.** The model underfits. Its training loss stays around 0.3 after 15 epochs, compared with about 0.05–0.1 before, and validation accuracy swings by up to 30 points between epochs. The augmentation did stop it from looking at the border and background (row 5), but on the missed `late_blight` leaves (rows 2 and 4) it now actively avoids the lesions, which show up as dark holes in the heatmap, and it is even more confident in the wrong answer. The problem is what it learned about lesions, not the framing, and augmentation can't fix that.
+- **`resnet18_ft`: slightly worse.** It had no shortcut to remove, so the harder training task only cost accuracy. In row 1, the strong-augmentation version even shifts attention to the background corner and gets the leaf wrong.
+
+**Decision:** the default training keeps basic augmentation, and `resnet18_ft` with basic augmentation remains the best model. Strong augmentation is still available behind a flag. With more epochs it might help `cnn`, but that was not tested.
+
+I also tried to measure the shift numerically, as the share of Grad-CAM heat that falls on the leaf. That required a leaf mask, and simple color-based masks (saturation thresholds, distance from the background color, and a greenness index with Otsu thresholding) were unreliable on this data. Pale lesions and shiny healthy leaves were classified as background, and slightly pink backgrounds were classified as leaf. Rather than report a number built on a broken mask, this comparison stays visual.
+
 ## Dataset
 
 A small, balanced sample of the [PlantVillage dataset](https://github.com/spMohanty/PlantVillage-Dataset) (color images, 256×256):
@@ -126,7 +156,7 @@ Both ResNet models resize inputs to 224×224 and normalize them with the ImageNe
 - Loss: `CrossEntropyLoss`
 - Optimizer: Adam
 - 15 epochs, batch size 32
-- Augmentation (training set only): random horizontal flip and random rotation of up to 15°
+- Augmentation (training set only): random horizontal flip and random rotation of up to 15°. The stronger variant is described in the previous section.
 - Seeded with `torch.manual_seed` (default seed 0, set with `--seed`). The seed controls weight initialization, shuffling order, and augmentation.
 - Checkpoint selection: the epoch with the highest validation accuracy, with ties broken by the lower validation loss. The tie-break matters for `resnet18_ft`, which reaches 100% validation accuracy from epoch 2 onward, so accuracy alone cannot rank those epochs.
 
@@ -143,17 +173,18 @@ Both ResNet models resize inputs to 224×224 and normalize them with the ImageNe
 ├── predict.py             # predict the class of a single image
 ├── experiments.py         # train every model with seeds 0, 1, 2 and summarize
 ├── app.py                 # Gradio web demo
-├── gradcam.py             # Grad-CAM heatmaps, saved to results/gradcam.jpg
+├── gradcam.py             # Grad-CAM heatmaps, saved to results/gradcam*.jpg
 ├── samples/               # one unseen image per class for quick testing
 ├── results/
-│   ├── experiments.csv    # per-seed test metrics
+│   ├── experiments.csv    # per-seed test metrics, basic augmentation
+│   ├── experiments_aug.csv  # per-seed test metrics, strong augmentation
 │   ├── cnn/
 │   ├── resnet18/
 │   └── resnet18_ft/
 └── requirements.txt
 ```
 
-`data/`, `checkpoints/`, and the `best_<model>.pth` files are not tracked in git. Running the steps below regenerates them.
+`data/`, `checkpoints/`, and the `best_<model>.pth` / `best_<model>_aug.pth` files are not tracked in git. Running the steps below regenerates them.
 
 ## How to run
 
@@ -181,6 +212,8 @@ python predict.py --model resnet18_ft samples/late_blight.jpg
 ```bash
 python experiments.py
 ```
+
+To use strong augmentation, add `--strong-augment` to `train.py` or `experiments.py`. Then run `python gradcam.py --compare-aug` to see the basic and strong-augmentation models side by side.
 
 The first ResNet run downloads the pretrained weights (about 45 MB) from download.pytorch.org.
 
@@ -219,6 +252,6 @@ Then open http://127.0.0.1:7860.
 ## Possible improvements
 
 - Use k-fold cross-validation so the test images also vary between runs.
-- Use more data, especially early-stage `late_blight` examples, and a larger validation set.
+- Use more data, especially early-stage `late_blight` examples, and a larger validation set. Augmentation did not fix `cnn`'s habit of ignoring small lesions, so more real examples of them are the likelier fix.
 - Flag low-confidence predictions for manual review. Confidence alone is not enough, though: `cnn` misclassifies `samples/late_blight.jpg` at 85.3% confidence.
 - Test on real field photos to measure the effect of domain shift.
