@@ -5,12 +5,11 @@ from pathlib import Path
 
 import gradio as gr
 
-from dataset import MODEL_CONFIGS
-from predict import load_class_names, load_model, predict
+from dataset import CLASS_NAMES, MODEL_CONFIGS
+from predict import load_model, predict
 
 SAMPLES_DIR = Path(__file__).resolve().parent / "samples"
 DEFAULT_MODEL = "resnet18_ft"
-CLASS_NAMES = load_class_names()
 
 DESCRIPTION = """
 Upload a photo of a single potato leaf to classify it as **healthy**, **early blight**, or **late blight**.

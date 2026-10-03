@@ -11,8 +11,8 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
-from dataset import MODEL_CONFIGS, build_transforms
-from predict import load_class_names, load_model
+from dataset import CLASS_NAMES, MODEL_CONFIGS, build_transforms
+from predict import load_model
 from train import DEVICE
 
 ROOT = Path(__file__).resolve().parent
@@ -80,7 +80,7 @@ def true_label(path: Path, class_names) -> str:
 
 
 def main(image_patterns, compare_aug: bool):
-    class_names = load_class_names()
+    class_names = CLASS_NAMES
     aug_options = [False, True] if compare_aug else [False]
     variants = [(name, aug) for name in MODEL_CONFIGS for aug in aug_options]
     models = {v: load_model(v[0], len(class_names), strong_augment=v[1]) for v in variants}

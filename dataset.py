@@ -8,6 +8,9 @@ from torchvision import datasets, transforms
 DATA_DIR = Path(__file__).resolve().parent / "data"
 BATCH_SIZE = 32
 
+# Label index order baked into every checkpoint (ImageFolder sorts folder names)
+CLASS_NAMES = ["early_blight", "healthy", "late_blight"]
+
 # Pretrained models must see inputs preprocessed the same way as during pretraining
 IMAGENET_CONFIG = {
     "image_size": 224,
@@ -71,7 +74,10 @@ def get_dataloaders(model_name: str = "cnn", strong_augment: bool = False):
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-    return train_loader, val_loader, test_loader, train_dataset.classes
+    if train_dataset.classes != CLASS_NAMES:
+        raise ValueError(f"data/train classes {train_dataset.classes} don't match CLASS_NAMES {CLASS_NAMES}")
+
+    return train_loader, val_loader, test_loader, CLASS_NAMES
 
 
 if __name__ == "__main__":

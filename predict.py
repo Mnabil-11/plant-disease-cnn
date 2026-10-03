@@ -6,18 +6,14 @@ from pathlib import Path
 import torch
 from PIL import Image
 
-from dataset import DATA_DIR, build_transforms
+from dataset import CLASS_NAMES, build_transforms
 from model import build_model
 from train import DEVICE, checkpoint_path, parse_model_arg
 
 
-def load_class_names():
-    # ImageFolder assigns label indices in sorted folder-name order
-    return sorted(p.name for p in (DATA_DIR / "train").iterdir() if p.is_dir())
-
-
 def load_model(model_name, num_classes, strong_augment=False):
-    model = build_model(model_name, num_classes=num_classes).to(DEVICE)
+    # The checkpoint holds every weight, so skip downloading ImageNet weights first
+    model = build_model(model_name, num_classes=num_classes, pretrained=False).to(DEVICE)
     model.load_state_dict(torch.load(checkpoint_path(model_name, strong_augment), map_location=DEVICE))
     model.eval()
     return model
@@ -39,7 +35,7 @@ def main():
     parser.add_argument("image_path", type=Path)
     args = parser.parse_args()
 
-    class_names = load_class_names()
+    class_names = CLASS_NAMES
     model = load_model(args.model, len(class_names))
     probabilities = predict(model, args.model, Image.open(args.image_path), class_names)
 

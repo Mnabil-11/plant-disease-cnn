@@ -38,8 +38,9 @@ class PlantDiseaseCNN(nn.Module):
         return x
 
 
-def build_resnet18(num_classes: int, freeze_backbone: bool):
-    model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+def build_resnet18(num_classes: int, freeze_backbone: bool, pretrained: bool = True):
+    weights = models.ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
+    model = models.resnet18(weights=weights)
 
     if freeze_backbone:
         for param in model.parameters():
@@ -49,13 +50,13 @@ def build_resnet18(num_classes: int, freeze_backbone: bool):
     return model
 
 
-def build_model(name: str, num_classes: int):
+def build_model(name: str, num_classes: int, pretrained: bool = True):
     if name == "cnn":
         return PlantDiseaseCNN(num_classes)
     if name == "resnet18":
-        return build_resnet18(num_classes, freeze_backbone=True)
+        return build_resnet18(num_classes, freeze_backbone=True, pretrained=pretrained)
     if name == "resnet18_ft":
-        return build_resnet18(num_classes, freeze_backbone=False)
+        return build_resnet18(num_classes, freeze_backbone=False, pretrained=pretrained)
     raise ValueError(f"unknown model: {name}")
 
 
