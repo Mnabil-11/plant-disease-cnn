@@ -1,5 +1,7 @@
 # Plant Disease Classification with a CNN
 
+**Live demo:** [huggingface.co/spaces/Mnabil11/plant-disease-cnn](https://huggingface.co/spaces/Mnabil11/plant-disease-cnn). The model runs in your browser, and no image is uploaded.
+
 A PyTorch project that classifies potato leaf images into three classes:
 
 - `healthy`
