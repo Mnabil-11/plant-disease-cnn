@@ -1,5 +1,6 @@
 """Train every model with several seeds and summarize test-set results."""
 
+import argparse
 import csv
 import statistics
 from pathlib import Path
@@ -14,7 +15,6 @@ from train import DEVICE, train
 SEEDS = [0, 1, 2]
 ROOT = Path(__file__).resolve().parent
 CHECKPOINT_DIR = ROOT / "checkpoints"
-RESULTS_CSV = ROOT / "results" / "experiments.csv"
 
 
 def test_metrics(model_name: str, checkpoint: str) -> dict:
@@ -35,8 +35,8 @@ def test_metrics(model_name: str, checkpoint: str) -> dict:
     }
 
 
-def write_csv(rows: list[dict]) -> None:
-    with open(RESULTS_CSV, "w", newline="") as f:
+def write_csv(rows: list[dict], path: Path) -> None:
+    with open(path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=rows[0].keys())
         writer.writeheader()
         writer.writerows(rows)
@@ -63,26 +63,31 @@ def summary_table(rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def main():
+def main(strong_augment: bool):
     CHECKPOINT_DIR.mkdir(exist_ok=True)
+    suffix = "_aug" if strong_augment else ""
+    results_csv = ROOT / "results" / f"experiments{suffix}.csv"
     rows = []
 
     for model_name in MODEL_CONFIGS:
         for seed in SEEDS:
-            print(f"=== {model_name} seed={seed} ===", flush=True)
+            print(f"=== {model_name}{suffix} seed={seed} ===", flush=True)
             checkpoint = train(
                 model_name,
                 seed=seed,
-                save_path=str(CHECKPOINT_DIR / f"{model_name}_seed{seed}.pth"),
+                save_path=str(CHECKPOINT_DIR / f"{model_name}{suffix}_seed{seed}.pth"),
+                strong_augment=strong_augment,
             )
             metrics = test_metrics(model_name, checkpoint)
             rows.append({"model": model_name, "seed": seed, **metrics})
-            write_csv(rows)
+            write_csv(rows, results_csv)
             print(f"result: {metrics}", flush=True)
 
-    print(f"\nseeds: {SEEDS}\n")
+    print(f"\nseeds: {SEEDS}, strong_augment: {strong_augment}\n")
     print(summary_table(rows))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--strong-augment", action="store_true")
+    main(parser.parse_args().strong_augment)

@@ -26,20 +26,30 @@ MODEL_CONFIGS = {
 }
 
 
-def build_transforms(model_name: str):
+def build_transforms(model_name: str, strong_augment: bool = False):
     config = MODEL_CONFIGS[model_name]
     size = (config["image_size"], config["image_size"])
     normalize = transforms.Normalize(config["mean"], config["std"])
 
-    train_transform = transforms.Compose(
-        [
+    if strong_augment:
+        # Vary framing, lighting, and color intensity so the model can't rely on
+        # the background or on how green the leaf is. Hue stays small because
+        # yellowing is a real early_blight symptom.
+        augment = [
+            transforms.RandomResizedCrop(size, scale=(0.6, 1.0)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
+            transforms.RandomRotation(30),
+            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.03),
+        ]
+    else:
+        augment = [
             transforms.Resize(size),
             transforms.RandomHorizontalFlip(),
             transforms.RandomRotation(15),
-            transforms.ToTensor(),
-            normalize,
         ]
-    )
+
+    train_transform = transforms.Compose([*augment, transforms.ToTensor(), normalize])
     eval_transform = transforms.Compose(
         [
             transforms.Resize(size),
@@ -50,8 +60,8 @@ def build_transforms(model_name: str):
     return train_transform, eval_transform
 
 
-def get_dataloaders(model_name: str = "cnn"):
-    train_transform, eval_transform = build_transforms(model_name)
+def get_dataloaders(model_name: str = "cnn", strong_augment: bool = False):
+    train_transform, eval_transform = build_transforms(model_name, strong_augment)
 
     train_dataset = datasets.ImageFolder(DATA_DIR / "train", transform=train_transform)
     val_dataset = datasets.ImageFolder(DATA_DIR / "val", transform=eval_transform)

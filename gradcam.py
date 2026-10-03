@@ -79,13 +79,15 @@ def true_label(path: Path, class_names) -> str:
     return "unknown"
 
 
-def main(image_patterns):
+def main(image_patterns, compare_aug: bool):
     class_names = load_class_names()
-    model_names = list(MODEL_CONFIGS)
-    models = {name: load_model(name, len(class_names)) for name in model_names}
+    aug_options = [False, True] if compare_aug else [False]
+    variants = [(name, aug) for name in MODEL_CONFIGS for aug in aug_options]
+    models = {v: load_model(v[0], len(class_names), strong_augment=v[1]) for v in variants}
     image_paths = resolve_images(image_patterns)
+    output_path = OUTPUT_PATH.with_stem("gradcam_compare_aug") if compare_aug else OUTPUT_PATH
 
-    n_rows, n_cols = len(image_paths), 1 + len(model_names)
+    n_rows, n_cols = len(image_paths), 1 + len(variants)
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(3.2 * n_cols, 3.4 * n_rows), squeeze=False)
 
     for row, path in enumerate(image_paths):
@@ -96,26 +98,31 @@ def main(image_patterns):
         short_name = path.stem if len(path.stem) <= 15 else path.name[:8]
         axes[row, 0].set_title(f"{short_name}\ntrue: {true_label(path, class_names)}", fontsize=9)
 
-        for col, name in enumerate(model_names, start=1):
+        for col, (name, aug) in enumerate(variants, start=1):
+            model = models[(name, aug)]
             _, eval_transform = build_transforms(name)
             tensor = eval_transform(image).unsqueeze(0).to(DEVICE)
-            cam, class_idx, confidence = grad_cam(models[name], TARGET_LAYERS[name](models[name]), tensor, output_size)
+            cam, class_idx, confidence = grad_cam(model, TARGET_LAYERS[name](model), tensor, output_size)
 
+            label = f"{name} +aug" if aug else name
             axes[row, col].imshow(image)
             axes[row, col].imshow(cam, cmap="jet", alpha=0.45)
-            axes[row, col].set_title(f"{name}\npred: {class_names[class_idx]} ({confidence:.0%})", fontsize=9)
+            axes[row, col].set_title(f"{label}\npred: {class_names[class_idx]} ({confidence:.0%})", fontsize=9)
 
     for ax in axes.flat:
         ax.axis("off")
 
     fig.tight_layout()
-    fig.savefig(OUTPUT_PATH, dpi=110, pil_kwargs={"quality": 85})
+    fig.savefig(output_path, dpi=110, pil_kwargs={"quality": 85})
     plt.close(fig)
-    print(f"saved {OUTPUT_PATH}")
+    print(f"saved {output_path}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("images", nargs="*", default=DEFAULT_IMAGES,
                         help="image paths or glob patterns (defaults to a set of hard test images)")
-    main(parser.parse_args().images)
+    parser.add_argument("--compare-aug", action="store_true",
+                        help="also show the strong-augmentation checkpoints (best_<model>_aug.pth)")
+    args = parser.parse_args()
+    main(args.images, args.compare_aug)

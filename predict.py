@@ -16,9 +16,9 @@ def load_class_names():
     return sorted(p.name for p in (DATA_DIR / "train").iterdir() if p.is_dir())
 
 
-def load_model(model_name, num_classes):
+def load_model(model_name, num_classes, strong_augment=False):
     model = build_model(model_name, num_classes=num_classes).to(DEVICE)
-    model.load_state_dict(torch.load(checkpoint_path(model_name), map_location=DEVICE))
+    model.load_state_dict(torch.load(checkpoint_path(model_name, strong_augment), map_location=DEVICE))
     model.eval()
     return model
 

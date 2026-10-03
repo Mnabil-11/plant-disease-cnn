@@ -33,8 +33,9 @@ def build_optimizer(model, model_name: str):
     return optim.Adam(trainable_params, lr=LEARNING_RATE)
 
 
-def checkpoint_path(model_name: str) -> str:
-    return f"best_{model_name}.pth"
+def checkpoint_path(model_name: str, strong_augment: bool = False) -> str:
+    suffix = "_aug" if strong_augment else ""
+    return f"best_{model_name}{suffix}.pth"
 
 
 def parse_model_arg(description: str):
@@ -65,12 +66,17 @@ def evaluate(model, loader, criterion):
     return avg_loss, accuracy
 
 
-def train(model_name: str, seed: int = DEFAULT_SEED, save_path: str | None = None) -> str:
-    save_path = save_path or checkpoint_path(model_name)
+def train(
+    model_name: str,
+    seed: int = DEFAULT_SEED,
+    save_path: str | None = None,
+    strong_augment: bool = False,
+) -> str:
+    save_path = save_path or checkpoint_path(model_name, strong_augment)
     # Seeds weight init, shuffling order, and augmentation, which all draw from torch's RNG
     torch.manual_seed(seed)
 
-    train_loader, val_loader, test_loader, class_names = get_dataloaders(model_name)
+    train_loader, val_loader, test_loader, class_names = get_dataloaders(model_name, strong_augment)
 
     model = build_model(model_name, num_classes=len(class_names)).to(DEVICE)
     criterion = nn.CrossEntropyLoss()
@@ -130,5 +136,6 @@ def train(model_name: str, seed: int = DEFAULT_SEED, save_path: str | None = Non
 if __name__ == "__main__":
     parser = parse_model_arg(__doc__)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument("--strong-augment", action="store_true")
     args = parser.parse_args()
-    train(args.model, seed=args.seed)
+    train(args.model, seed=args.seed, strong_augment=args.strong_augment)
